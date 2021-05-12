@@ -6,7 +6,7 @@ global updater := new Updater()
 
 class Updater extends WebGui {
 
-    url := "https://api.github.com/repos/conajer/PoEapi/releases/latest"
+    url := "https://api.github.com/repos/Rebrandsoft/POE-Guard/releases/latest"
 
     __new() {
         base.__new("Updater",, 700, 400)
@@ -54,7 +54,7 @@ class Updater extends WebGui {
             http.WaitForResponse()
 
             this.release := this.document.parentWindow.JSON.parse(http.ResponseText)
-            if (RegExMatch(this.release.name, "PoEapikit-(.*)", matched)) {
+            if (RegExMatch(this.release.name, "POE-Guard-(.*)", matched)) {
                 if (matched1 > version) {
                     innerHtml .= "<H1>" this.release.name "</H1>"
                     innerHtml .= "<H3>Release Notes:</H3>"
