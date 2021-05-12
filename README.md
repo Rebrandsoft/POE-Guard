@@ -1,6 +1,6 @@
 - 👋 Hi, I’m @WildRage
 
-<!---
+
 You need AutoHotkey 1.1.33 or above to run the POE-Guard.
 
 Features:
@@ -18,4 +18,4 @@ HINTS:
 2. AutoQuit's default level is 90, threshold is 20% of life + es. (autoQuitMinLevel, autoQuitThresholdPercentage)
 3. Set 'rarity' of MinimapSymbol to 0 to show normal monsters.
 4. Click 'Kills' label to show kills stats of recent maps.
---->
+
