@@ -7,11 +7,11 @@ global PluginOptions := { "AutoFlask"     : { "enabled" : false}
                                             , "door"    : true }
                         , "AutoPickup"    : { "enabled" : true, "range" : 50
                                             , "ignoreChests"      : true
-                                            , "strictLevel"       : 0
+                                            , "strictLevel"       : 3
                                             , "genericItemFilter" : "Incubator|Quicksilver|Basalt|Quartz|(Divine|Eternal) Life"
                                             , "rareItemFilter"    : "Jewel|Amulet|Ring|Belt" }
                         , "KillCounter"   : { "enabled" : true, "radius" : 50 }
-                        , "MinimapSymbol" : { "enabled" : true
+                        , "MinimapSymbol" : { "enabled" : false
                                             , "showNPC"            : false
                                             , "showPlayer"         : false
                                             , "showMonsters"       : true
