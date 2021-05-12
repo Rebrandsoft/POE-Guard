@@ -48,9 +48,9 @@ DllCall("poeapi\poeapi_get_version", "int*", major_version, "int*", minor_versio
 global logger := new Logger("PoEGuard By WildRage(D.K) log")
 global ptask := new PoETask()
 
-global version := "1.1.3"
+global version := "1.2.1"
 global poeapiVersion := Format("{}.{}.{}", major_version, minor_version, patchlevel)
-syslog("<b>PoEGuard v{} (" _("Powered by WildRage (D.K)") " PoEapi v{})</b>", version, poeapiVersion)
+syslog("<b>PoEGuard v{} (" _("Powered by WildRage (D.K)") " POE-Guard v{})</b>", version, poeapiVersion)
 
 Hotkey, IfWinActive, ahk_class POEWindowClass
 Hotkey, ~%AttackSkillKey%, Attack
@@ -63,7 +63,7 @@ Hotkey, IfWinActive
 #Include, %A_ScriptDir%\extras\vendoring.ahk
 #Include, %A_ScriptDir%\extras\Pricer.ahk
 #Include, %A_ScriptDir%\extras\Trader.ahk
-;#Include, %A_ScriptDir%\extras\Updater.ahk
+#Include, %A_ScriptDir%\extras\Updater.ahk
 
 OnExit("__Exit")
 

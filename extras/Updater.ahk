@@ -9,7 +9,7 @@ class Updater extends WebGui {
     url := "https://api.github.com/repos/Rebrandsoft/POE-Guard/releases/latest"
 
     __new() {
-        base.__new("Updater",, 700, 400)
+        base.__new("POE-Guard By WildRage(D.K) Updater",, 700, 400)
         this.document.write("
         (%
         <!DOCTYPE html>
