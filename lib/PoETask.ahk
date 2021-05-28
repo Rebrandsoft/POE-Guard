@@ -62,12 +62,17 @@ class Rules {
             || (rule.baseName && RegExMatch(item.baseName, rule.baseName)))
         {
             for key, val in rule.constraints {
-
                 if (IsObject(val)) {
-                    if (item[key] < val[1] || item[key] > val[2])
+                    if (item[key] < val[1] || item[key] >= val[2])
                         return false
-                } else if (Not (item[key] ~= val)) {
-                    return false
+                } else {
+                    if val is number
+                        if (item[key] != val)
+                            return false
+
+                    if val is not number
+                        if (Not (item[key] ~= val))
+                            return false
                 }
             }
 
@@ -247,7 +252,7 @@ class PoETask extends AhkObj {
 
         this.activate()
         if (Not this.getChat().isOpened())
-            SendInput, {Enter}
+            keys := "{Enter}" keys
 
         if (NoSend)
             SendInput, %keys%
@@ -256,7 +261,9 @@ class PoETask extends AhkObj {
     }
 
     beginPickup() {
-        this.getPlugin("AutoPickup").beginPickup()
+        ap := this.getPlugin("AutoPickup")
+        ap.stopPickup()
+        ap.beginPickup()
     }
 
     stopPickup() {
@@ -282,7 +289,7 @@ class PoETask extends AhkObj {
             this.target.getPos(x, y)
             clipToRect(this.actionArea, x, y)
             MouseClick(x, y)
-            Sleep, 300
+            Sleep, 500
         }
 
         return false
@@ -347,22 +354,25 @@ class PoETask extends AhkObj {
     }
 
     levelupGems() {
-        l := this.width - 150
-        t := 170
-        r := this.width - 50
-        b := this.height - 300
-
         MouseGetPos, oldX, oldY
-        loop {
-            ImageSearch, x, y, l, t, r, b, *30 *TransBlack %A_ScriptDir%\images\level_up_gem.bmp
-            if (ErrorLevel != 0)
+        gems := this.getIngameUI().getChild(5, 2, 1)
+        n := gems.getChilds().Count()
+        loop, %n% {
+            for i, e in gems.getChilds() {
+                if (e.getChild(4).getText() == "Click to level up") {
+                    e.getChild(2).getPos(x, y)
+                    MouseClick(x, y)
+                    m += 1
+                    Sleep, 75
+                    break
+                }
+            }
+
+            if (m < A_Index)
                 break
-            MouseClick(x + 40, y + 8)
-            n += 1
-            Sleep, 100
         }
 
-        if (n > 0)
+        if (m > 0)
             MouseMove, oldX, oldY, 0
     }
 

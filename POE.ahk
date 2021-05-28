@@ -14,11 +14,6 @@ SetWorkingDir %A_ScriptDir%
 CoordMode, Mouse, Client
 CoordMode, Pixel, Client
 
-I_Icon = %A_ScriptDir%\images\clarity_skill_icon.ico
-IfExist, %I_Icon%
-Menu, Tray, Icon, %I_Icon%
-;return
-
 #Include, %A_ScriptDir%\lib\PoEapi.ahk
 #Include, %A_ScriptDir%\Settings.ahk
 
@@ -48,7 +43,7 @@ DllCall("poeapi\poeapi_get_version", "int*", major_version, "int*", minor_versio
 global logger := new Logger("PoEGuard By WildRage(D.K) log")
 global ptask := new PoETask()
 
-global version := "1.3.1"
+global version := "1.3.2"
 global poeapiVersion := Format("{}.{}.{}", major_version, minor_version, patchlevel)
 syslog("<b>PoEGuard v{} (" _("Powered by WildRage (D.K)") " POE-Guard v{})</b>", version, poeapiVersion)
 
@@ -123,6 +118,10 @@ objdump(obj, prefix = "", depth = 0) {
         } catch {}
     }
 }
+
+~s::
+    ptask.levelupGems()
+return
 
 Attack:
     if (ptask.InMap)
