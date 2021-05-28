@@ -10,6 +10,11 @@ If (Not A_IsAdmin) {
     }
 }
 
+I_Icon = %A_ScriptDir%\images\clarity_skill_icon.ico
+IfExist, %I_Icon%
+Menu, Tray, Icon, %I_Icon%
+;return
+
 SetWorkingDir %A_ScriptDir%
 CoordMode, Mouse, Client
 CoordMode, Pixel, Client
