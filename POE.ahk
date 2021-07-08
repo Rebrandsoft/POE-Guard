@@ -48,7 +48,7 @@ DllCall("poeapi\poeapi_get_version", "int*", major_version, "int*", minor_versio
 global logger := new Logger("PoEGuard By WildRage(D.K) log")
 global ptask := new PoETask()
 
-global version := "1.3.3"
+global version := "1.3.4"
 global poeapiVersion := Format("{}.{}.{}", major_version, minor_version, patchlevel)
 syslog("<b>PoEGuard v{} (" _("Powered by WildRage (D.K)") " POE-Guard v{})</b>", version, poeapiVersion)
 
