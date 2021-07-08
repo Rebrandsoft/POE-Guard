@@ -6,7 +6,7 @@ if (FileExist("..\poeapi.dll")) {
     FileMove ..\poeapi.dll, poeapi.dll, true
 }
 
-if (Not loadLibrary("poeapi.dll")) {
+if (Not pLib := loadLibrary("poeapi.dll")) {
     errCode := DllCall("GetLastError")
     if (errCode == 0xc1)
         Msgbox, % "You need 64-Bit AutoHotkey to run PoEapikit."
@@ -46,6 +46,9 @@ global WM_PTASK_ATTACHED   := 0x9100
 global WM_PTASK_ACTIVE     := 0x9101
 global WM_PTASK_LOADED     := 0x9102
 global WM_PTASK_EXIT       := 0x9103
+
+; Initialize ahkpp
+ahkpp_init(pLib)
 
 ; Register PoEapi classes
 ahkpp_register_class(PoETask)
@@ -119,14 +122,12 @@ class Entity extends PoEObject {
 class Element extends PoEObject {
 
     getChild(params*) {
-        e := this
-        for i, n in params {
-            if (e.getChilds().Count() < n)
-                return
-            e := e.childs[n]
-        }
+        VarSetCapacity(path, (params.Length() + 1) * 4)
+        for i, n in params
+            NumPut(n - 1, path, (i - 1) * 4, "Int")
+        NumPut(-1, path, params.Length() * 4, "Int")
 
-        return e
+        return this.__Call("getChild", &path)
     }
 
     getPos(ByRef x = "", ByRef y = "") {
@@ -148,7 +149,7 @@ class Element extends PoEObject {
         if (r.w < 0 || r.h < 0)
             return
         ptask.c.drawRect(r.l + x, r.t + y, r.w, r.h, bgr)
-        ptask.c.drawText(label, r.l + x, r.t + y, bgr, "white")
+        ptask.c.drawText(label, r.l + x, r.t + y, bgr, "white", 0)
 
         for i, e in this.getChilds() {
             if (e.isVisible()) {
@@ -237,8 +238,11 @@ class Inventory extends InventoryGrid {
     }
 
     use(item, targetItem = "", n = 1) {
-        if (Not item)
-            return item
+        if (Not IsObject(item)) {
+            item := this.findItem(item)
+            if (Not item)
+                return
+        }
 
         if (n > 1)
             SendInput {Shift down}
@@ -263,7 +267,7 @@ class Inventory extends InventoryGrid {
             SendInput, {Enter}
 
         cursor := ptask.inventories[13]
-        if (Not cursor.getItems()[1])
+        if (Not cursor.getItemByIndex(1))
             return false
 
         try {
@@ -274,14 +278,11 @@ class Inventory extends InventoryGrid {
             if (Not this.items[index]) {
                 this.moveTo(index)
                 Click
-                Sleep, 100
             }
         } finally {
             Critical off
         }
 
-        if (cursor.getItems()[1])
-            return false
         return true
     }
 }
@@ -306,36 +307,48 @@ class StashTab extends InventoryGrid {
                 }
 
                 stackSize := aItem.stackSize()
-                m := (n && (n - dumped < stackCount)) ? n - dumped : stackCount
-                while (m > 0) {
+                k := (n && (n - dumped < stackCount)) ? n - dumped : stackCount
+                while (k > 0) {
+                    m  := k
                     this.moveTo(aItem.index)
-                    if (m >= stackSize || m == stackCount) {
-                        SendInput {Ctrl down}
-                        Click
-                        SendInput {Ctrl up}
-                        Sleep, 30
-                    } else {
-                        SendInput +{Click}
-                        SendInput, %m%{Enter}
-                        Sleep, 100
-                        
-                        if (Not ptask.inventory.drop()) {
-                            this.moveTo(aItem.index)
-                            Click
-                            return dumped
+                    while (m > 0) {
+                        if (m >= stackSize || k == stackCount) {
+                            SendInput, ^{Click}
+                            Sleep, 30
+                            m -= stackSize
+                        } else {
+                            aItem := this.getItemByIndex(aItem.index)
+                            l := stackCount - aItem.stackCount()
+                            if (l < k - m) {
+                                m := k - l
+                                continue
+                            }
+
+                            Sleep, 30
+                            SendInput +{Click}
+                            SendInput, %m%{Enter}
+                            Sleep, 100
+                            
+                            if (Not ptask.inventory.drop()) {
+                                this.moveTo(aItem.index)
+                                Click
+                                return dumped
+                            }
+
+                            m -= m
                         }
+
+                        if (Not ptask.inventory.freeCells())
+                            break
                     }
 
+                    Sleep, 50
                     aItem := this.getItemByIndex(aItem.index)
-                    k := aItem ? stackCount - aItem.stackCount() : stackCount
-                    dumped += k
-                    stackCount -= k
-                    m -= k
-
-                    if (Not ptask.inventory.freeCells())
-                        break
+                    m := aItem ? stackCount - aItem.stackCount() : stackCount
+                    dumped += m
+                    stackCount -= m
+                    k -= m
                 }
-                SendInput {Ctrl up}
             }
         }
 
@@ -349,7 +362,7 @@ class SpecialStashTab extends StashTab {
         this.__Call("getChilds")
         this.getItems()
         for i, e in this.childs {
-            if (e.getChilds().Count() == 2) {
+            if (e.getChilds().Length() == 2) {
                 left := e.childs[2].getInt(0x390) + 1
                 top := e.childs[2].getInt(0x394) + 1
                 e.index := (left - 1) * this.rows + top
@@ -469,15 +482,15 @@ class Stash extends Element {
                 key := (activeTabIndex > tabIndex) ? "Left" : "Right"
                 SendInput {%key% %n%}
 
-                loop, 3 {
-                    Sleep, 20
+                loop, 5 {
+                    Sleep, 30
                     if (this.activeTabIndex() == tabIndex)
                         break
                 }
+
+                return true
             }
         }
-
-        return true
     }
 
     __getTabs() {
@@ -536,18 +549,40 @@ class Vendor extends Element {
         if (sell.isOpened())
             return true
 
-        if (this.selectNPC()) {
+        if (ptask.areaName == "The Rogue Harbour") {
+            e := ptask.getIngameUI().getChild(26, 9)
+            if (Not e.getChild(1).getText() ~= "Faustus") {
+                SendInput, %CloseAllUIKey%
+                if (Not ptask.select("Faustus"))
+                    return
+            }
+
+            loop, 30 {
+                if (e.getChild(1).getText() ~= "Faustus") {
+                    service := e.getChild(2, 2).findChild(_("Sell Items"))
+                    if (service) {
+                        service.getPos(x, y)
+                        MouseClick(x, y)
+                        break
+                    }
+                }
+                Sleep, 50
+            }
+        } else {
+            if (Not this.selectNPC())
+                return
+
             service := this.selectService(_("Sell Items"))
             if (service) {
                 service.getPos(x, y)
                 MouseClick(x, y)
-
-                loop, 10 {
-                    if (sell.isOpened())
-                        return true
-                    Sleep, 50
-                }
             }
+        }
+
+        loop, 10 {
+            if (sell.isOpened())
+                return true
+            Sleep, 50
         }
 
         return false
