@@ -18,14 +18,18 @@ global __ahkpp_types := [ "Char"          ; AhkChar
                          ,"WStr"          ; AhkWStringPtr
                          ,"Char" ]        ; AhkBool      
 global __ahkpp_value := ""
+global ahkpp_new, ahkpp_get, ahkpp_set, ahkpp_call, ahkpp_set_callbacks
 
-ahkpp_new(className) {
-    obj := DllCall("poeapi\ahkpp_new", "Ptr", 0, "Str", className, "Ptr")
-    return Object(obj)
-}
+ahkpp_init(pLib) {
+    for i, name in ["new", "get", "set", "call", "set_callbacks"]
+        ahkpp_%name% := DllCall("GetProcAddress", "Ptr", pLib, "AStr", "ahkpp_" name, "Ptr")
 
-ahkpp_delete(obj) {
-    DllCall("poeapi\ahkpp_delete", "Ptr", &obj)
+    DllCall(ahkpp_set_callbacks
+        , "Ptr", RegisterCallback("__New")
+        , "Ptr", RegisterCallback("__Delete", "F")
+        , "Ptr", RegisterCallback("__Get", "F")
+        , "Ptr", RegisterCallback("__Set", "F")
+        , "Ptr", RegisterCallback("__Call", "F"))
 }
 
 ahkpp_register_class(classObj) {
@@ -39,83 +43,67 @@ ahkpp_register_class(classObj) {
 class AhkObj {
 
     __New() {
+        DllCall(ahkpp_new, "Ptr", Object(this), "Str", this.__Class)
         this.__self := &this
-        DllCall("poeapi\ahkpp_new", "Ptr", Object(this), "Str", this.__Class)
     }
 
     __Get(key) {
         if (key != "__properties" && key != "__methods") {
-            if (this.__properties[key]) {
-                valType := this.__properties[key]
-                value := DllCall("poeapi\ahkpp_get", "Ptr", this.__self, "Str", key, valType)
+            if (valType := this.__properties[key]) {
+                value := DllCall(ahkpp_get, "Ptr", this.__self, "Str", key, valType)
                 if (valType == "UPtr") {
                     if (value)
                         return Object(value)
 
                     value := {}
-                    DllCall("poeapi\ahkpp_set", "Ptr", this.__self, "Str", key, "UPtr", Object(value))
+                    DllCall(ahkpp_set, "Ptr", this.__self, "Str", key, "UPtr", Object(value))
                 }
 
                 return value
-            } else if (this.__methods[key]) {
-                if (this.__methods[key].Count() == 1) {
-                    retType := this.__methods[key][1]
-                    result := DllCall("poeapi\ahkpp_call", "Ptr", this.__self, "Str", key, retType)
-                    return (retType == "UPtr") ? Object(result) : result
+            } else if (m := this.__methods[key]) {
+                if (m.params.Length() == 0) {
+                    result := DllCall(ahkpp_call, "Ptr", this.__self, "Str", key, m.returnType)
+                    return (m.returnType == "UPtr") ? Object(result) : result
                 }
             }
         }
     }
 
     __Set(key, value) {
-        if (this.__properties[key]) {
-            valType := this.__properties[key]
+        if (valType := this.__properties[key]) {
             if (valType == "UPtr") {
                 value := Object(value)
             }
 
-            return DllCall("poeapi\ahkpp_set", "Ptr", this.__self, "Str", key, valType, value)
+            return DllCall(ahkpp_set, "Ptr", this.__self, "Str", key, valType, value)
         } else if (this.__methods["set" key]) {
             name := "set" key
             if (this.__methods[name].Count() == 2) {
                 valType := this.__methods[name][1]
-                DllCall("poeapi\ahkpp_call", "Ptr", this.__self, "Str", name, valType, value)
+                DllCall(ahkpp_call, "Ptr", this.__self, "Str", name, valType, value)
 
                 return value
             }
         }
     }
-    
+
     __Call(name, params*) {
-        if (this.__methods[name]) {
-            T := this.__methods[name]
-            if (params.Count() != T.Count() - 1) {
-                MsgBox, % name ": invalid number of parameters, should be " T.Count() - 1 " parameters."
+        if (m := this.__methods[name]) {
+            if (m.params.Length() != params.Length()) {
+                MsgBox, % this.__Class "." name "(): invalid number of parameters, should be " m.params.Length() " parameters."
                 return
             }
 
-            switch params.Count() {
-            case 0: result := DllCall("poeapi\ahkpp_call", "Ptr", this.__self, "Str", name, T[1])
-            case 1: result := DllCall("poeapi\ahkpp_call", "Ptr", this.__self, "Str", name, T[1], params[1], T[2])
-            case 2: result := DllCall("poeapi\ahkpp_call", "Ptr", this.__self, "Str", name, T[1], params[1], T[2], params[2], T[3])
-            case 3: result := DllCall("poeapi\ahkpp_call", "Ptr", this.__self, "Str", name, T[1], params[1], T[2], params[2], T[3], params[3], T[4])
-            case 4: result := DllCall("poeapi\ahkpp_call", "Ptr", this.__self, "Str", name, T[1], params[1], T[2], params[2], T[3], params[3], T[4], params[4], T[5])
-            case 5: result := DllCall("poeapi\ahkpp_call", "Ptr", this.__self, "Str", name, T[1], params[1], T[2], params[2], T[3], params[3], T[4], params[4], T[5], params[5], T[6])
-            case 6: result := DllCall("poeapi\ahkpp_call", "Ptr", this.__self, "Str", name, T[1], params[1], T[2], params[2], T[3], params[3], T[4], params[4], T[5], params[5], T[6], params[6], T[7])
-            case 7: result := DllCall("poeapi\ahkpp_call", "Ptr", this.__self, "Str", name, T[1], params[1], T[2], params[2], T[3], params[3], T[4], params[4], T[5], params[5], T[6], params[6], T[7], params[7], T[8])
-            case 8: result := DllCall("poeapi\ahkpp_call", "Ptr", this.__self, "Str", name, T[1], params[1], T[2], params[2], T[3], params[3], T[4], params[4], T[5], params[5], T[6], params[6], T[7], params[7], T[8], params[8], T[9])
-            }
-            return (T[params.Count() + 1] == "UPtr") ? Object(result) : result
+            args := ["Ptr", this.__self, "Str", name]
+            for i, p in m.params
+                args.Push(p, params[A_Index])
+            args.Push(m.returnType)
+            result := DllCall(ahkpp_call, args*)
+
+            return (m.returnType == "UPtr") ? Object(result) : result
         }
     }
 }
-
-DllCall("poeapi\ahkpp_set_callbacks"
-    , "Ptr", RegisterCallback("__New")
-    , "Ptr", RegisterCallback("__Delete", "F")
-    , "Ptr", RegisterCallback("__Get", "F")
-    , "Ptr", RegisterCallback("__Set", "F")
-    , "Ptr", RegisterCallback("__Call", "F"))
 
 __New(className, baseClassName) {
     className := StrGet(className)
@@ -132,17 +120,15 @@ __New(className, baseClassName) {
                     __ahkpp_classes[className] := obj
                 }
             }
-        } else {
-            if (className != "AhkObj") {
-                if (__ahkpp_classes[className])
-                    obj.base := __ahkpp_classes[className]
-                else if (IsObject(%className%))
-                    obj.base := %className%
-                else
-                    obj.base := {"__Class":className}
-                obj.__Init()
-                obj.__self := &obj
-            }
+        } else if (className != "AhkObj") {
+            if (__ahkpp_classes[className])
+                obj.base := __ahkpp_classes[className]
+            else if (IsObject(%className%))
+                obj.base := %className%
+            else
+                obj.base := {"__Class":className}
+            obj.__Init()
+            obj.__self := &obj
         }
     }
 
@@ -171,7 +157,7 @@ __Set(obj, key, params*) {
     while (key) {
         key := StrGet(key)
         if (key == "")
-            key := obj.Count() + 1
+            key := obj.Length() + 1
 
         type := NumGet(params + offset + 8, "Int")
         switch type {
@@ -189,10 +175,10 @@ __Set(obj, key, params*) {
             value := NumGet(params + offset, __ahkpp_types[type])
         }
 
-        if (Not obj && key != "")
-            %key% := value
-        else
+        if (obj)
             obj[key] := value
+        else
+            %key% := value
 
         key := NumGet(params + offset + 16, "Ptr")
         offset += 24

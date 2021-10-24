@@ -99,7 +99,7 @@ class PoETask extends AhkObj {
         OnMessage(WM_AREA_CHANGED, ObjBindMethod(this, "onAreaChanged"))
         OnMessage(WM_PLAYER_CHANGED, ObjBindMethod(this, "onPlayerChanged"))
         OnMessage(WM_PICKUP, ObjBindMethod(this, "onPickup"))
-        OnMessage(WM_USE_SKILL, ObjBindMethod(this, "onUseSkill"))
+        OnMessage(WM_PTASK_EXIT, ObjBindMethod(this, "onExit"))
 
         this.player := new Character()
 
@@ -127,7 +127,23 @@ class PoETask extends AhkObj {
     }
 
     onLoaded() {
+        if (Not this.league) {
+            oldLanguage := language
+            readIni("production_Config.ini")
+            if (language != oldLanguage) {
+                db.loadTranslations()
+                this.nav.close()
+                this.nav := new Navi()
+                this.c := this.nav.getCanvas()
+            }
+        }
         this.reset()
+    }
+
+    onExit() {
+        this.league := ""
+        this.InHideout := false
+        this.InMap := false
     }
 
     onAttached(hwnd) {
@@ -174,6 +190,7 @@ class PoETask extends AhkObj {
         } else {
             if (Not WinActive("ahk_class AutoHotkeyGUI")) {
                 if (Not WinActive("ahk_id " this.Hwnd)) {
+                    this.c.clear()
                     this.nav.hide()
                     this.hud.hide()
                 }
@@ -271,25 +288,24 @@ class PoETask extends AhkObj {
     }
 
     select(name) {
-        if (Not WinActive("ahk_class POEWindowClass"))
+        if (Not this.isActive)
             return
 
-        this.selected := false
-        this.target := this.getNearestEntity(name)
-        if (Not this.target)
-            return false
+        entity := this.getNearestEntity(name)
+        if (Not entity)
+            return
 
         vendor := this.getVendor()
-        loop, 5 {
-            if (this.selected || (this.target.path ~= "NPC" && vendor.isSelected())) {
-                this.target := ""
-                return true
-            }
-
-            this.target.getPos(x, y)
+        loop, 10 {
+            entity.getPos(x, y)
             clipToRect(this.actionArea, x, y)
-            MouseClick(x, y)
+            MouseMove, x, y, 0
+            Sleep, 30
+            e := ptask.getHoveredElement()
+            SendInput, {Click}
             Sleep, 500
+            if (vendor.isSelected() || e.getText() == entity.name())
+                return true
         }
 
         return false
@@ -359,8 +375,9 @@ class PoETask extends AhkObj {
         n := gems.getChilds().Count()
         loop, %n% {
             for i, e in gems.getChilds() {
-                if (e.getChild(4).getText() == "Click to level up") {
-                    e.getChild(2).getPos(x, y)
+                e := e.getChild(2)
+                if (e.getByte(0x11c) != -1) {
+                    e.getPos(x, y)
                     MouseClick(x, y)
                     m += 1
                     Sleep, 75
@@ -376,31 +393,48 @@ class PoETask extends AhkObj {
             MouseMove, oldX, oldY, 0
     }
 
-    displayItemPrice(e, sum = false) {
+    displayItemPrice(e, sum = false, anchor = 3, align = -1, baseline = -1) {
         price := e.item.price
-        if (sum && e.item.stackCount > 0)
-            price := e.item.stackCount * price
-
         if (e.item && price >= 0.05) {
+            if (sum && e.item.stackCount > 1)
+                price := e.item.stackCount * price
+
             if (price > 1000)
-                p := Format("{:.f}k", price / 1000)
+                price := Format("{:.f}k", price / 1000)
             else if (price < 1)
-                p := Format("{:.g}", price)
+                price := Format("{:.g}", price)
             else
-                p := Format("{:.f}", price)
+                price := Format("{:.f}", price)
 
             r := e.getRect()
-            if (p >= 10)
-                this.c.drawText(p, r.r, r.b, "white", "red", 2)
+            switch (anchor) {
+            case 1: x := r.l, y := r.t
+            case 2: x := r.r, y := r.t
+            case 3: x := r.r, y := r.b
+            case 4: x := r.l, y := r.b
+            default: x := (r.r + r.l) / 2, y := (r.b + r.t) / 2
+            }
+
+            if (price >= 10)
+                this.c.drawText(price, x, y, "white", "red", align, baseline)
             else
-                this.c.drawText(p, r.r, r.b, "#00007f", "gold", 2)
+                this.c.drawText(price, x, y, "#00007f", "gold", align, baseline)
         }
     }
 
-    showPrices() {
-        stickyMode := false
+    showPrices(item = "") {
         shift := GetKeyState("Shift")
-        this.c.clear()
+        if (item) {
+             e := this.getHoveredElement()
+             r := e.getRect()
+             MouseGetPos, x, y
+             if (Not pointInRect(r, x, y))
+                e := e.getParent()
+             e.item := item
+             this.displayItemPrice(e, shift, 1, 1, 1)
+             return
+        }
+
         if (this.stash.isOpened()) {
             for i, e in this.stash.Tab.getChilds() {
                 if (e.isVisible())
@@ -413,32 +447,24 @@ class PoETask extends AhkObj {
                 this.displayItemPrice(e, shift)
         }
 
-        favours := this.getFavours()
-        if (favours.isOpened()) {
-            for i, e in favours.getChilds() {
-                e.item.price := $(e.item)
-                this.displayItemPrice(e, true)
-            }
-        }
-
         purchase := ptask.getPurchase()
         if (purchase.isOpened()) {
             for i, e in purchase.getChilds() {
                 e.item.price := $(e.item)
-                this.displayItemPrice(e)
+                this.displayItemPrice(e, shift)
             }
         }
 
-        loop, {
-            if (GetKeyState("Ctrl"))
-                stickyMode := true
-            Sleep, 100
-            if (Not GetKeyState("Alt")) {
-                if (Not stickyMode)
-                    this.c.clear()
-                break
+        if (prophesier.isOpened()) {
+            for i, p in prophesier.getProphecies() {
+                p.item := {"price": $(p.name)}
+                this.displayItemPrice(p)
             }
         }
+    }
+
+    setStatus(text, args*) {
+        this.nav.setStatus(Format(text, args*))
     }
 
     onAreaChanged(areaName, lParam) {
@@ -456,16 +482,6 @@ class PoETask extends AhkObj {
 
     onPlayerChanged(name) {
         syslog(this.player.whois())
-    }
-
-    onUseSkill(skill, target) {
-        skill := StrGet(skill)
-        if (skill == "Interactive") {
-            if (this.target) {
-                if (this.target.address == target)
-                    this.selected := true
-            }
-        }
     }
 
     onAttack() {
